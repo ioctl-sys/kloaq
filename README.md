@@ -42,6 +42,9 @@ If an account violates policy, that account gets banned. If someone returns with
 ### Minimalist stack
 Built with raw PHP (no framework), optimized for fast rendering on high-latency networks (Tor/I2P).
 
+### Ephemeral by design
+Content lives in RAM only - posts and comments disappear on server restart. Only encrypted user accounts persist to disk. See [STORAGE.md](STORAGE.md) for details.
+
 ## Roadmap
 
 - [ ] Phase 1: Anonymous text posting ("Drop")
@@ -49,10 +52,19 @@ Built with raw PHP (no framework), optimized for fast rendering on high-latency 
 - [ ] Phase 3: Cryptographic deletion (passphrases to delete your own posts)
 - [ ] Phase 4: maybe `.onion` hidden service setup
 
-## Quick Privacy Site
+## Quick Start
 
-A Reddit-style anonymous link aggregator in `/public/`:
+### Simple method (run.sh)
+```bash
+./run.sh
+```
 
+### Or manually with PHP built-in server
+```bash
+cd public && php -S localhost:8000
+```
+
+### Apache setup (production)
 ```bash
 # Install PHP and Apache
 sudo apt-get install php libapache2-mod-php
@@ -64,9 +76,16 @@ sudo a2enmod rewrite
 sudo cp privacy-site.apache.conf /etc/apache2/sites-available/
 sudo a2ensite privacy-site
 sudo systemctl reload apache2
-
-# Or run with PHP built-in server
-cd public && php -S localhost:8000
 ```
 
-Then open http://localhost
+Then open http://localhost:8000
+
+### Storage Configuration
+
+Set encryption key for user accounts database:
+```bash
+export KLOAQ_DB_KEY="$(openssl rand -base64 32)"
+./run.sh
+```
+
+**Important:** All posts/comments are stored in RAM and will be lost on restart. Only user accounts persist. See [STORAGE.md](STORAGE.md) for the full architecture.
