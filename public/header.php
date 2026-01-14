@@ -63,6 +63,26 @@
         
         .back-link { color: #0079d3; text-decoration: none; margin-bottom: 16px; display: inline-block; }
         
+        .auth-form { max-width: 400px; margin: 40px auto; }
+        .auth-form input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        .auth-form button { width: 100%; padding: 12px; background: #0079d3; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        .auth-form button:hover { background: #006cbd; }
+        .auth-form .switch-link { text-align: center; margin-top: 16px; color: #787c7e; }
+        .auth-form .switch-link a { color: #0079d3; }
+        .error-box { background: #fee; border: 1px solid #fcc; padding: 12px; border-radius: 4px; margin-bottom: 16px; color: #c00; }
+        .success-box { background: #efe; border: 1px solid #cfc; padding: 12px; border-radius: 4px; margin-bottom: 16px; color: #060; }
+        
+        .settings-box { background: #fff; border-radius: 4px; border: 1px solid #ccc; padding: 20px; margin-bottom: 16px; }
+        .settings-box h2 { font-size: 1.2rem; margin-bottom: 16px; color: #1c1c1c; }
+        .settings-box h3 { font-size: 1rem; margin-bottom: 8px; color: #1c1c1c; }
+        .settings-box p { color: #787c7e; font-size: 0.9rem; margin-bottom: 12px; }
+        .settings-box .stat { font-size: 1.5rem; font-weight: bold; color: #0079d3; }
+        .btn-danger { background: #ff4500; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-danger:hover { background: #e03d00; }
+        .btn-secondary { background: #edeff1; color: #1c1c1c; border: 1px solid #ccc; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-secondary:hover { background: #dae0e6; }
+        .user-link { color: #0079d3; font-weight: 500; }
+        
         @media (max-width: 960px) {
             .layout { grid-template-columns: 1fr; }
             .sidebar { display: none; }
@@ -77,7 +97,18 @@
                 <a href="?">hot</a>
                 <a href="?sort=new">new</a>
                 <a href="?sort=top">top</a>
+                <a href="?action=subs">subs</a>
                 <a href="?action=submit">submit</a>
+                <?php if (is_admin()): ?>
+                    <a href="?action=admin">admin</a>
+                <?php endif; ?>
+                <?php if (is_logged_in()): ?>
+                    <a href="?action=settings" class="user-link"><?= htmlspecialchars(current_user()) ?></a>
+                    <a href="?action=logout">logout</a>
+                <?php else: ?>
+                    <a href="?action=signin">sign in</a>
+                    <a href="?action=signup">sign up</a>
+                <?php endif; ?>
             </nav>
         </div>
     </header>

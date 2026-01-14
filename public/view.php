@@ -14,6 +14,10 @@ if (!$post) {
 require 'header.php';
 ?>
         <a href="?" class="back-link">Back to all posts</a>
+
+        <?php if (($_GET['err'] ?? '') === 'restricted'): ?>
+            <div class="error-box" style="margin-bottom: 16px;">Your account is restricted and cannot comment right now.</div>
+        <?php endif; ?>
         
         <div class="layout post-view">
             <main>
@@ -30,7 +34,11 @@ require 'header.php';
                         </form>
                     </div>
                     <div class="post-content">
-                        <div class="post-meta">Posted <?= format_time($post['created_at']) ?> ago</div>
+                        <div class="post-meta">
+                            <a href="?sub=<?= urlencode($post['sub'] ?? 'main') ?>" style="color: #0079d3; text-decoration: none;">/s/<?= htmlspecialchars($post['sub'] ?? 'main') ?></a>
+                            · Posted by <strong><?= htmlspecialchars($post['author'] ?? 'anon') ?></strong>
+                            <?= format_time($post['created_at']) ?> ago
+                        </div>
                         <h1 class="post-title"><?= htmlspecialchars($post['title']) ?></h1>
                         <div class="post-content-full">
                             <p><?= nl2br(htmlspecialchars($post['content'])) ?></p>
@@ -53,8 +61,9 @@ require 'header.php';
                     ?>
                     <div class="comment">
                         <div class="comment-meta">
-                            <span><?= format_time($comment['created_at']) ?> ago</span>
+                            <strong><?= htmlspecialchars($comment['author'] ?? 'anon') ?></strong>
                             <span style="margin-left: 8px;"><?= $comment['votes'] ?> points</span>
+                            <span style="margin-left: 8px;"><?= format_time($comment['created_at']) ?> ago</span>
                         </div>
                         <div class="comment-content"><?= htmlspecialchars($comment['content']) ?></div>
                         <div class="comment-actions">

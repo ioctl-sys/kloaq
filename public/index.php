@@ -3,6 +3,43 @@ require_once 'lib.php';
 
 $action = $_GET['action'] ?? '';
 
+// Auth routes
+if ($action === 'signup') {
+    require 'signup.php';
+    exit;
+}
+
+if ($action === 'signin') {
+    require 'signin.php';
+    exit;
+}
+
+if ($action === 'logout') {
+    logout_user();
+    header("Location: ?");
+    exit;
+}
+
+if ($action === 'settings') {
+    require 'settings.php';
+    exit;
+}
+
+if ($action === 'subs') {
+    require 'subs.php';
+    exit;
+}
+
+if ($action === 'create_sub') {
+    require 'create_sub.php';
+    exit;
+}
+
+if ($action === 'admin') {
+    require 'admin.php';
+    exit;
+}
+
 if ($action === 'vote' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $type = $_GET['type'] ?? '';
     $id = $_GET['id'] ?? 0;
@@ -28,7 +65,11 @@ if ($action === 'comment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $content = trim($_POST['content'] ?? '');
     
     if ($content && $post_id) {
-        create_comment($post_id, $parent_id, $content);
+        $ok = create_comment($post_id, $parent_id, $content);
+        if ($ok === false) {
+            header("Location: ?action=view&id=$post_id&err=restricted");
+            exit;
+        }
     }
     
     header("Location: ?action=view&id=$post_id");

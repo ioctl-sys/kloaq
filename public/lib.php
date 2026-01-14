@@ -1,4 +1,49 @@
 <?php
+function kloaq_load_dotenv($path) {
+    if (!is_file($path) || !is_readable($path)) return;
+
+    $lines = file($path, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) return;
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) continue;
+
+        // allow: export KEY=VALUE
+        if (str_starts_with($line, 'export ')) {
+            $line = trim(substr($line, 7));
+        }
+
+        $eq = strpos($line, '=');
+        if ($eq === false) continue;
+
+        $key = trim(substr($line, 0, $eq));
+        $value = trim(substr($line, $eq + 1));
+        if ($key === '') continue;
+
+        // ignore invalid keys
+        if (!preg_match('/^[A-Z0-9_]+$/', $key)) continue;
+
+        // strip quotes
+        if ((str_starts_with($value, '"') && str_ends_with($value, '"')) || (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+            $value = substr($value, 1, -1);
+        }
+
+        // don't override real environment
+        if (getenv($key) !== false) continue;
+        if (isset($_ENV[$key]) || isset($_SERVER[$key])) continue;
+
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
+// Load repo-root .env (one level above /public)
+kloaq_load_dotenv(dirname(__DIR__) . '/.env');
+
+session_start();
+
 define('DATA_DIR', __DIR__ . '/data');
 define('DB_FILE', DATA_DIR . '/accounts.db');
 define('DB_ENCRYPTION_KEY', getenv('KLOAQ_DB_KEY') ?: 'change-this-to-secure-key-in-production');
@@ -7,18 +52,213 @@ if (!is_dir(DATA_DIR)) mkdir(DATA_DIR, 0755, true);
 
 // In-memory storage for ephemeral content (posts, comments, votes)
 class MemoryStore {
-    private static $posts = [];
-    private static $comments = [];
-    private static $votes = [];
+    private const KEY_POSTS = 'kloaq_posts_v1';
+    private const KEY_COMMENTS = 'kloaq_comments_v1';
+    private const KEY_VOTES = 'kloaq_votes_v1';
+    private const KEY_SUBS = 'kloaq_subs_v1';
+
+    private static function apcuAvailable() {
+        if (!function_exists('apcu_fetch') || !function_exists('apcu_store')) return false;
+        // When running under the built-in server (CLI SAPI), APCu is often disabled unless apc.enable_cli=1
+        $enabled = ini_get('apc.enabled');
+        if ($enabled !== false && $enabled !== '' && $enabled != '1') return false;
+        if (PHP_SAPI === 'cli' && ini_get('apc.enable_cli') != '1') return false;
+        return true;
+    }
+
+    private static function get($key, $default) {
+        if (self::apcuAvailable()) {
+            $success = false;
+            $value = apcu_fetch($key, $success);
+            return $success ? $value : $default;
+        }
+
+        // Session fallback: persists across requests for the current user only.
+        // This keeps dev working even without APCu installed.
+        if (!isset($_SESSION['__memstore'])) $_SESSION['__memstore'] = [];
+        return $_SESSION['__memstore'][$key] ?? $default;
+    }
+
+    private static function set($key, $value) {
+        if (self::apcuAvailable()) {
+            apcu_store($key, $value);
+            return;
+        }
+        if (!isset($_SESSION['__memstore'])) $_SESSION['__memstore'] = [];
+        $_SESSION['__memstore'][$key] = $value;
+    }
+
+    public static function getPosts() { return self::get(self::KEY_POSTS, []); }
+    public static function setPosts($posts) { self::set(self::KEY_POSTS, $posts); }
+
+    public static function getComments() { return self::get(self::KEY_COMMENTS, []); }
+    public static function setComments($comments) { self::set(self::KEY_COMMENTS, $comments); }
+
+    public static function getVotes() { return self::get(self::KEY_VOTES, []); }
+    public static function setVotes($votes) { self::set(self::KEY_VOTES, $votes); }
+
+    public static function getSubs() {
+        $subs = self::get(self::KEY_SUBS, []);
+        if (empty($subs)) {
+            $subs = [
+                'main' => [
+                    'name' => 'main',
+                    'title' => 'main',
+                    'description' => 'Default subKloaq',
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'creator' => 'system'
+                ]
+            ];
+            self::set(self::KEY_SUBS, $subs);
+        }
+        return $subs;
+    }
+
+    public static function setSubs($subs) { self::set(self::KEY_SUBS, $subs); }
     
-    public static function getPosts() { return self::$posts; }
-    public static function setPosts($posts) { self::$posts = $posts; }
+    // Delete all content by a specific user
+    public static function deleteUserContent($username) {
+        // Get post IDs by this user (to delete associated comments)
+        $posts = self::getPosts();
+        $userPostIds = array_column(array_filter($posts, fn($p) => ($p['author'] ?? 'anon') === $username), 'id');
+        
+        // Remove user's posts
+        $newPosts = array_values(array_filter($posts, fn($p) => ($p['author'] ?? 'anon') !== $username));
+        self::setPosts($newPosts);
+        
+        // Remove user's comments
+        $comments = self::getComments();
+        $newComments = array_values(array_filter($comments, fn($c) => ($c['author'] ?? 'anon') !== $username));
+        self::setComments($newComments);
+        
+        // Remove user's votes
+        $votes = self::getVotes();
+        foreach ($votes as $key => $vote) {
+            if (($vote['user'] ?? '') === $username) {
+                unset($votes[$key]);
+            }
+        }
+        self::setVotes($votes);
+        
+        return ['posts' => count($userPostIds), 'comments' => count($comments) - count($newComments)];
+    }
     
-    public static function getComments() { return self::$comments; }
-    public static function setComments($comments) { self::$comments = $comments; }
-    
-    public static function getVotes() { return self::$votes; }
-    public static function setVotes($votes) { self::$votes = $votes; }
+    // Get stats for a user
+    public static function getUserStats($username) {
+        $posts = array_filter(self::getPosts(), fn($p) => ($p['author'] ?? 'anon') === $username);
+        $comments = array_filter(self::getComments(), fn($c) => ($c['author'] ?? 'anon') === $username);
+        return [
+            'posts' => count($posts),
+            'comments' => count($comments)
+        ];
+    }
+
+    public static function deletePostById($postId) {
+        $postId = (int)$postId;
+        $posts = self::getPosts();
+        $before = count($posts);
+        $posts = array_values(array_filter($posts, fn($p) => (int)$p['id'] !== $postId));
+        self::setPosts($posts);
+
+        // Remove comments for this post (all depths)
+        $comments = self::getComments();
+        $cBefore = count($comments);
+        $comments = array_values(array_filter($comments, fn($c) => (int)$c['post_id'] !== $postId));
+        self::setComments($comments);
+
+        return ['posts' => $before - count($posts), 'comments' => $cBefore - count($comments)];
+    }
+
+    public static function deleteCommentById($commentId) {
+        $commentId = (int)$commentId;
+        $comments = self::getComments();
+        $byId = [];
+        foreach ($comments as $c) $byId[(int)$c['id']] = $c;
+        if (!isset($byId[$commentId])) return ['comments' => 0];
+
+        // Collect descendants
+        $toDelete = [$commentId => true];
+        $changed = true;
+        while ($changed) {
+            $changed = false;
+            foreach ($comments as $c) {
+                $pid = $c['parent_id'] === null ? null : (int)$c['parent_id'];
+                if ($pid !== null && isset($toDelete[$pid]) && !isset($toDelete[(int)$c['id']])) {
+                    $toDelete[(int)$c['id']] = true;
+                    $changed = true;
+                }
+            }
+        }
+
+        $before = count($comments);
+        $comments = array_values(array_filter($comments, fn($c) => !isset($toDelete[(int)$c['id']])));
+        self::setComments($comments);
+        return ['comments' => $before - count($comments)];
+    }
+
+    public static function deleteSub($name) {
+        $name = strtolower(trim((string)$name));
+        if ($name === 'main') return ['ok' => false, 'error' => 'Cannot delete main.'];
+        $subs = self::getSubs();
+        if (!isset($subs[$name])) return ['ok' => false, 'error' => 'Sub not found.'];
+        unset($subs[$name]);
+        self::setSubs($subs);
+
+        $posts = self::getPosts();
+        $postIds = [];
+        foreach ($posts as $p) if (($p['sub'] ?? 'main') === $name) $postIds[(int)$p['id']] = true;
+        $beforePosts = count($posts);
+        $posts = array_values(array_filter($posts, fn($p) => ($p['sub'] ?? 'main') !== $name));
+        self::setPosts($posts);
+
+        $comments = self::getComments();
+        $beforeComments = count($comments);
+        $comments = array_values(array_filter($comments, fn($c) => !isset($postIds[(int)$c['post_id']])));
+        self::setComments($comments);
+
+        return ['ok' => true, 'posts' => $beforePosts - count($posts), 'comments' => $beforeComments - count($comments)];
+    }
+
+    public static function purgeAllContent() {
+        self::setPosts([]);
+        self::setComments([]);
+        self::setVotes([]);
+        self::setSubs([]); // getSubs() will re-seed main
+        self::getSubs();
+    }
+}
+
+// Session helpers
+function current_user() {
+    return $_SESSION['username'] ?? null;
+}
+
+function is_logged_in() {
+    return isset($_SESSION['username']);
+}
+
+function login_user($username) {
+    $_SESSION['username'] = $username;
+    $_SESSION['login_time'] = time();
+}
+
+function logout_user() {
+    session_destroy();
+    session_start();
+}
+
+// Admin helpers
+function admin_users() {
+    $raw = getenv('KLOAQ_ADMIN_USERS') ?: '';
+    $parts = array_filter(array_map('trim', explode(',', $raw)));
+    $parts = array_map('strtolower', $parts);
+    return array_values(array_unique($parts));
+}
+
+function is_admin() {
+    $u = current_user();
+    if (!$u) return false;
+    return in_array(strtolower($u), admin_users(), true);
 }
 
 // Encrypted database for user accounts only
@@ -35,9 +275,34 @@ function get_db() {
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                banned INTEGER DEFAULT 0
+                banned INTEGER DEFAULT 0,
+                restricted INTEGER DEFAULT 0
             )
         ");
+
+        // Lightweight schema migration for older DBs
+        $cols = $db->query("PRAGMA table_info(accounts)")->fetchAll(PDO::FETCH_ASSOC);
+        $colNames = array_map(fn($c) => $c['name'], $cols);
+        if (!in_array('restricted', $colNames, true)) {
+            $db->exec("ALTER TABLE accounts ADD COLUMN restricted INTEGER DEFAULT 0");
+        }
+
+        // Dev-only bootstrap: create an initial admin account if configured
+        $bootstrapUser = getenv('KLOAQ_BOOTSTRAP_ADMIN_USERNAME') ?: '';
+        $bootstrapPass = getenv('KLOAQ_BOOTSTRAP_ADMIN_PASSWORD') ?: '';
+        if ($bootstrapUser !== '' && $bootstrapPass !== '') {
+            $bootstrapUser = trim($bootstrapUser);
+            if ($bootstrapUser !== '') {
+                $stmt = $db->prepare("SELECT 1 FROM accounts WHERE username = ? LIMIT 1");
+                $stmt->execute([$bootstrapUser]);
+                $exists = (bool)$stmt->fetchColumn();
+                if (!$exists) {
+                    $hash = password_hash($bootstrapPass, PASSWORD_ARGON2ID);
+                    $ins = $db->prepare("INSERT INTO accounts (username, password_hash, banned, restricted) VALUES (?, ?, 0, 0)");
+                    $ins->execute([$bootstrapUser, $hash]);
+                }
+            }
+        }
     }
     return $db;
 }
@@ -67,6 +332,43 @@ function get_posts($sort = 'hot') {
     return $posts;
 }
 
+function get_subs() {
+    $subs = MemoryStore::getSubs();
+    ksort($subs);
+    return $subs;
+}
+
+function get_sub($name) {
+    $name = strtolower(trim((string)$name));
+    $subs = MemoryStore::getSubs();
+    return $subs[$name] ?? null;
+}
+
+function create_sub($name, $title, $description) {
+    if (!is_logged_in()) return ['ok' => false, 'error' => 'You must be signed in to create a subKloaq.'];
+
+    $name = strtolower(trim($name));
+    $title = trim($title);
+    $description = trim($description);
+
+    if (strlen($name) < 3 || strlen($name) > 21) return ['ok' => false, 'error' => 'Name must be 3–21 characters.'];
+    if (!preg_match('/^[a-z0-9_]+$/', $name)) return ['ok' => false, 'error' => 'Name can only contain lowercase letters, numbers, and underscores.'];
+    if (strlen($title) < 3) return ['ok' => false, 'error' => 'Title must be at least 3 characters.'];
+
+    $subs = MemoryStore::getSubs();
+    if (isset($subs[$name])) return ['ok' => false, 'error' => 'That subKloaq already exists.'];
+
+    $subs[$name] = [
+        'name' => $name,
+        'title' => $title,
+        'description' => $description,
+        'created_at' => date('Y-m-d H:i:s'),
+        'creator' => current_user()
+    ];
+    MemoryStore::setSubs($subs);
+    return ['ok' => true, 'name' => $name];
+}
+
 function get_post($id) {
     $posts = MemoryStore::getPosts();
     foreach ($posts as $p) if ($p['id'] == $id) return $p;
@@ -86,12 +388,13 @@ function get_comments($post_id, $parent_id = null) {
 
 function vote($type, $id, $value) {
     $votes = MemoryStore::getVotes();
+    $user = current_user();
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    $key = "${type}_${id}_${ip}";
+    $key = $user ? "${type}_${id}_user_${user}" : "${type}_${id}_${ip}";
     
     if (isset($votes[$key])) return false;
     
-    $votes[$key] = ['value' => $value, 'time' => time()];
+    $votes[$key] = ['value' => $value, 'time' => time(), 'user' => $user];
     MemoryStore::setVotes($votes);
     
     if ($type === 'post') {
@@ -106,13 +409,21 @@ function vote($type, $id, $value) {
     return true;
 }
 
-function create_post($title, $content) {
+function create_post($title, $content, $sub = 'main') {
+    if (is_logged_in() && is_account_restricted(current_user())) return false;
     $posts = MemoryStore::getPosts();
     $id = $posts ? max(array_column($posts, 'id')) + 1 : 1;
+
+    $sub = strtolower(trim((string)$sub));
+    if (!$sub) $sub = 'main';
+    if (!get_sub($sub)) $sub = 'main';
+
     $posts[] = [
         'id' => $id,
+        'sub' => $sub,
         'title' => $title,
         'content' => $content,
+        'author' => current_user() ?? 'anon',
         'votes' => 0,
         'created_at' => date('Y-m-d H:i:s')
     ];
@@ -121,6 +432,7 @@ function create_post($title, $content) {
 }
 
 function create_comment($post_id, $parent_id, $content) {
+    if (is_logged_in() && is_account_restricted(current_user())) return false;
     $comments = MemoryStore::getComments();
     $id = $comments ? max(array_column($comments, 'id')) + 1 : 1;
     $comments[] = [
@@ -128,6 +440,7 @@ function create_comment($post_id, $parent_id, $content) {
         'post_id' => $post_id,
         'parent_id' => $parent_id,
         'content' => $content,
+        'author' => current_user() ?? 'anon',
         'votes' => 0,
         'created_at' => date('Y-m-d H:i:s')
     ];
@@ -192,10 +505,30 @@ function verify_account($username, $password) {
     return password_verify($password, $account['password_hash']);
 }
 
-function ban_account($username) {
+function set_account_banned($username, $banned) {
     $db = get_db();
-    $stmt = $db->prepare("UPDATE accounts SET banned = 1 WHERE username = ?");
+    $stmt = $db->prepare("UPDATE accounts SET banned = ? WHERE username = ?");
+    $stmt->execute([(int)!!$banned, $username]);
+}
+
+function ban_account($username) { set_account_banned($username, true); }
+function unban_account($username) { set_account_banned($username, false); }
+
+function set_account_restricted($username, $restricted) {
+    $db = get_db();
+    $stmt = $db->prepare("UPDATE accounts SET restricted = ? WHERE username = ?");
+    $stmt->execute([(int)!!$restricted, $username]);
+}
+
+function restrict_account($username) { set_account_restricted($username, true); }
+function unrestrict_account($username) { set_account_restricted($username, false); }
+
+function is_account_restricted($username) {
+    $db = get_db();
+    $stmt = $db->prepare("SELECT restricted FROM accounts WHERE username = ?");
     $stmt->execute([$username]);
+    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $account && (int)$account['restricted'] === 1;
 }
 
 function is_banned($username) {
@@ -204,4 +537,30 @@ function is_banned($username) {
     $stmt->execute([$username]);
     $account = $stmt->fetch(PDO::FETCH_ASSOC);
     return $account && $account['banned'];
+}
+
+function list_accounts($limit = 200) {
+    $db = get_db();
+    $limit = max(1, min(1000, (int)$limit));
+    $stmt = $db->query("SELECT username, created_at, banned, restricted FROM accounts ORDER BY created_at DESC LIMIT $limit");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function delete_account($username) {
+    // First delete all user content from RAM
+    $deleted = MemoryStore::deleteUserContent($username);
+    
+    // Then delete from database
+    $db = get_db();
+    $stmt = $db->prepare("DELETE FROM accounts WHERE username = ?");
+    $stmt->execute([$username]);
+    
+    return $deleted;
+}
+
+function get_account_info($username) {
+    $db = get_db();
+    $stmt = $db->prepare("SELECT id, username, created_at, banned FROM accounts WHERE username = ?");
+    $stmt->execute([$username]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
 }

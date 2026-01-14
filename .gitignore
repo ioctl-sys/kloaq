@@ -1,0 +1,3 @@
+.env
+public/data/accounts.db
+public/data/*.db

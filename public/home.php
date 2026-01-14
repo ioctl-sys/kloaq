@@ -2,16 +2,31 @@
 require_once 'lib.php';
 
 $sort = $_GET['sort'] ?? 'hot';
+$sub = $_GET['sub'] ?? '';
+$subObj = $sub ? get_sub($sub) : null;
 $posts = get_posts($sort);
+
+if ($subObj) {
+    $posts = array_values(array_filter($posts, fn($p) => ($p['sub'] ?? 'main') === $subObj['name']));
+}
 
 require 'header.php';
 ?>
         <div class="layout">
             <main>
+                <?php if ($subObj): ?>
+                    <div class="sidebar-box" style="margin-bottom: 16px;">
+                        <h3 style="margin-bottom: 6px;">/s/<?= htmlspecialchars($subObj['name']) ?></h3>
+                        <?php if (!empty($subObj['description'])): ?>
+                            <p style="font-size: 0.85rem; color: #4a4a4a;"><?= htmlspecialchars($subObj['description']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
                 <div class="sort-bar">
-                    <a href="?" class="sort-btn <?= $sort === 'hot' ? 'active' : '' ?>">Hot</a>
-                    <a href="?sort=new" class="sort-btn <?= $sort === 'new' ? 'active' : '' ?>">New</a>
-                    <a href="?sort=top" class="sort-btn <?= $sort === 'top' ? 'active' : '' ?>">Top</a>
+                    <a href="?<?= $subObj ? 'sub=' . urlencode($subObj['name']) . '&' : '' ?>sort=hot" class="sort-btn <?= $sort === 'hot' ? 'active' : '' ?>">Hot</a>
+                    <a href="?<?= $subObj ? 'sub=' . urlencode($subObj['name']) . '&' : '' ?>sort=new" class="sort-btn <?= $sort === 'new' ? 'active' : '' ?>">New</a>
+                    <a href="?<?= $subObj ? 'sub=' . urlencode($subObj['name']) . '&' : '' ?>sort=top" class="sort-btn <?= $sort === 'top' ? 'active' : '' ?>">Top</a>
                 </div>
                 
                 <?php foreach ($posts as $post): ?>
@@ -28,7 +43,11 @@ require 'header.php';
                         </form>
                     </div>
                     <div class="post-content">
-                        <div class="post-meta">Posted <?= format_time($post['created_at']) ?> ago</div>
+                        <div class="post-meta">
+                            <a href="?sub=<?= urlencode($post['sub'] ?? 'main') ?>" style="color: #0079d3; text-decoration: none;">/s/<?= htmlspecialchars($post['sub'] ?? 'main') ?></a>
+                            · Posted by <strong><?= htmlspecialchars($post['author'] ?? 'anon') ?></strong>
+                            <?= format_time($post['created_at']) ?> ago
+                        </div>
                         <h2 class="post-title"><a href="?action=view&id=<?= $post['id'] ?>"><?= htmlspecialchars($post['title']) ?></a></h2>
                         <p class="post-preview"><?= htmlspecialchars(substr($post['content'], 0, 150)) ?><?= strlen($post['content']) > 150 ? '...' : '' ?></p>
                         <div class="post-actions">

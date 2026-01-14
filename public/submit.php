@@ -1,9 +1,9 @@
 <?php
 require_once 'lib.php';
-require 'header.php';
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $sub = trim($_POST['sub'] ?? 'main');
     $title = trim($_POST['title'] ?? '');
     $content = trim($_POST['content'] ?? '');
     
@@ -12,11 +12,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strlen($content) < 10) {
         $error = 'Content must be at least 10 characters.';
     } else {
-        $id = create_post($title, $content);
-        header("Location: ?action=view&id=$id");
-        exit;
+        $id = create_post($title, $content, $sub);
+        if ($id === false) {
+            $error = 'Your account is restricted and cannot post right now.';
+        } else {
+            header("Location: ?action=view&id=$id");
+            exit;
+        }
     }
 }
+
+require 'header.php';
 ?>
         <div class="layout">
             <main style="max-width: 600px;">
@@ -30,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 <div class="sidebar-box create-form">
                     <form method="post">
+                        <input type="text" name="sub" placeholder="subKloaq (default: main)" value="<?= htmlspecialchars($_POST['sub'] ?? ($_GET['sub'] ?? 'main')) ?>" required minlength="3" maxlength="21" pattern="[a-z0-9_]+" title="lowercase letters, numbers, underscores">
                         <input type="text" name="title" placeholder="Title" value="<?= htmlspecialchars($_POST['title'] ?? '') ?>" required minlength="3">
                         <textarea name="content" placeholder="Text (optional)" required minlength="10"><?= htmlspecialchars($_POST['content'] ?? '') ?></textarea>
                         <button type="submit">Post</button>
