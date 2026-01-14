@@ -1,0 +1,21 @@
+[14-Jan-2026 14:54:44 UTC] [kloaq] Uncaught exception: PDOException: could not find driver in /home/void/work/kloaq/public/lib.php:325
+Stack trace:
+#0 /home/void/work/kloaq/public/lib.php(325): PDO->__construct()
+#1 /home/void/work/kloaq/public/lib.php(543): get_db()
+#2 /home/void/work/kloaq/public/signup.php(28): create_account()
+#3 /home/void/work/kloaq/public/index.php(8): require('...')
+#4 {main}
+[14-Jan-2026 14:55:57 UTC] [kloaq] Uncaught exception: PDOException: could not find driver in /home/void/work/kloaq/public/lib.php:325
+Stack trace:
+#0 /home/void/work/kloaq/public/lib.php(325): PDO->__construct()
+#1 /home/void/work/kloaq/public/lib.php(543): get_db()
+#2 /home/void/work/kloaq/public/signup.php(28): create_account()
+#3 /home/void/work/kloaq/public/index.php(8): require('...')
+#4 {main}
+[14-Jan-2026 16:56:14 UTC] [kloaq] Uncaught exception: PDOException: could not find driver in /home/void/work/kloaq/public/lib.php:325
+Stack trace:
+#0 /home/void/work/kloaq/public/lib.php(325): PDO->__construct()
+#1 /home/void/work/kloaq/public/lib.php(543): get_db()
+#2 /home/void/work/kloaq/public/signup.php(28): create_account()
+#3 /home/void/work/kloaq/public/index.php(8): require('...')
+#4 {main}

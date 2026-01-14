@@ -42,6 +42,34 @@ function kloaq_load_dotenv($path) {
 // Load repo-root .env (one level above /public)
 kloaq_load_dotenv(dirname(__DIR__) . '/.env');
 
+// Error logging (helps diagnose blank 500s)
+if (!is_dir(__DIR__ . '/data')) {
+    @mkdir(__DIR__ . '/data', 0755, true);
+}
+if (is_dir(__DIR__ . '/data') && is_writable(__DIR__ . '/data')) {
+    ini_set('log_errors', '1');
+    ini_set('error_log', __DIR__ . '/data/php_errors.log');
+}
+
+$kloaqDebug = (getenv('KLOAQ_DEBUG') === '1');
+if ($kloaqDebug) {
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+    error_reporting(E_ALL);
+}
+
+set_exception_handler(function ($e) use ($kloaqDebug) {
+    error_log("[kloaq] Uncaught exception: " . $e);
+    http_response_code(500);
+    if ($kloaqDebug && !headers_sent()) {
+        header('Content-Type: text/plain; charset=UTF-8');
+    }
+    if ($kloaqDebug) {
+        echo "KLOAQ ERROR\n\n";
+        echo (string)$e;
+    }
+});
+
 session_start();
 
 define('DATA_DIR', __DIR__ . '/data');
@@ -49,6 +77,34 @@ define('DB_FILE', DATA_DIR . '/accounts.db');
 define('DB_ENCRYPTION_KEY', getenv('KLOAQ_DB_KEY') ?: 'change-this-to-secure-key-in-production');
 
 if (!is_dir(DATA_DIR)) mkdir(DATA_DIR, 0755, true);
+
+function kloaq_ensure_db_writable() {
+    if (!is_dir(DATA_DIR)) {
+        @mkdir(DATA_DIR, 0755, true);
+    }
+
+    if (!is_writable(DATA_DIR)) {
+        // Best-effort for dev; production should set proper ownership/permissions.
+        @chmod(DATA_DIR, 0777);
+    }
+
+    if (file_exists(DB_FILE)) {
+        if (!is_writable(DB_FILE)) {
+            // If the DB was created by a different user (e.g., CLI), Apache may not be able to write.
+            @chmod(DB_FILE, 0666);
+        }
+        if (!is_writable(DB_FILE)) {
+            throw new RuntimeException('Accounts DB is not writable by the web server. Fix permissions for ' . DB_FILE . ' (e.g. chown/chmod public/data).');
+        }
+        return;
+    }
+
+    // Create the file with broad write perms for dev setups.
+    if (is_writable(DATA_DIR)) {
+        @touch(DB_FILE);
+        @chmod(DB_FILE, 0666);
+    }
+}
 
 // In-memory storage for ephemeral content (posts, comments, votes)
 class MemoryStore {
@@ -265,6 +321,7 @@ function is_admin() {
 function get_db() {
     static $db = null;
     if ($db === null) {
+        kloaq_ensure_db_writable();
         $db = new PDO('sqlite:' . DB_FILE);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
