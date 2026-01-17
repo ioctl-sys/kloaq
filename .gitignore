@@ -1,3 +1,6 @@
 .env
 public/data/accounts.db
 public/data/*.db
+public/data/*.log
+*.log
+server.log

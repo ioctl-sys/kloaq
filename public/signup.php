@@ -39,34 +39,49 @@ require 'header.php';
 ?>
         <div class="auth-form">
             <div class="sidebar-box">
-                <h2 style="text-align: center; margin-bottom: 20px;">Create Account</h2>
+                <h2>🔐 Create Account</h2>
+                
+                <p class="sidebar-description text-center" style="margin-bottom: var(--space-xl);">
+                    Join kloaq to publish anonymously and participate in communities.
+                </p>
                 
                 <?php if ($error): ?>
                 <div class="error-box"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
                 
                 <form method="post">
-                    <input type="text" name="username" placeholder="Username" 
+                    <label class="form-label">Username</label>
+                    <input type="text" name="username" placeholder="Choose a username" 
                            value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" 
                            required minlength="3" maxlength="20" 
                            pattern="[a-zA-Z0-9_]+" 
                            title="Letters, numbers, and underscores only">
-                    <input type="password" name="password" placeholder="Password" required minlength="8">
-                    <input type="password" name="confirm" placeholder="Confirm Password" required>
-                    <button type="submit">Sign Up</button>
+                    <p class="form-hint">3-20 characters. Letters, numbers, and underscores only.</p>
+                    
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" placeholder="Create a password" required minlength="8">
+                    <p class="form-hint">Minimum 8 characters. Choose a strong password.</p>
+                    
+                    <label class="form-label">Confirm Password</label>
+                    <input type="password" name="confirm" placeholder="Confirm your password" required>
+                    
+                    <button type="submit">Create Account</button>
                 </form>
                 
                 <div class="switch-link">
-                    Already have an account? <a href="?action=signin">Sign in</a>
+                    Already have an account? <a href="?action=signin">Sign in instead</a>
                 </div>
             </div>
             
-            <div style="margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 4px; font-size: 0.85rem; color: #787c7e;">
-                <strong>Privacy notice:</strong><br>
-                • Your password is hashed with Argon2ID (never stored in plain text)<br>
-                • Only your username and password hash are saved<br>
-                • All posts/comments are stored in RAM only and will be wiped on server restart<br>
-                • You can delete all your data anytime from Settings
+            <div class="info-box">
+                <strong>🔒 Privacy Notice</strong>
+                <p>
+                    • Your password is hashed with Argon2ID (never stored in plain text)<br>
+                    • Only your username and password hash are saved<br>
+                    • All posts/comments are stored in RAM only<br>
+                    • No email required, no personal data collected<br>
+                    • You can delete all your data anytime from Settings
+                </p>
             </div>
         </div>
     </div>

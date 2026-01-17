@@ -25,28 +25,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require 'header.php';
 ?>
         <div class="layout">
-            <main style="max-width: 600px;">
-                <h1 style="margin-bottom: 20px;">Create a Post</h1>
+            <main style="max-width: 700px;">
+                <a href="?" class="back-link">← Back to home</a>
+                
+                <div class="sidebar-box" style="margin-bottom: var(--space-xl);">
+                    <h1 style="margin-bottom: var(--space-md); font-size: 2rem;">📝 Create a Post</h1>
+                    <p class="sidebar-description">
+                        Share your thoughts, links, or discussions with the community. Your post will be anonymous and stored ephemerally in RAM.
+                    </p>
+                </div>
                 
                 <?php if ($error): ?>
-                <div style="background: #fee; border: 1px solid #fcc; padding: 12px; border-radius: 4px; margin-bottom: 16px; color: #c00;">
+                <div class="error-box">
                     <?= htmlspecialchars($error) ?>
                 </div>
                 <?php endif; ?>
                 
                 <div class="sidebar-box create-form">
                     <form method="post">
-                        <input type="text" name="sub" placeholder="subKloaq (default: main)" value="<?= htmlspecialchars($_POST['sub'] ?? ($_GET['sub'] ?? 'main')) ?>" required minlength="3" maxlength="21" pattern="[a-z0-9_]+" title="lowercase letters, numbers, underscores">
-                        <input type="text" name="title" placeholder="Title" value="<?= htmlspecialchars($_POST['title'] ?? '') ?>" required minlength="3">
-                        <textarea name="content" placeholder="Text (optional)" required minlength="10"><?= htmlspecialchars($_POST['content'] ?? '') ?></textarea>
-                        <button type="submit">Post</button>
+                        <label class="form-label">Community (subKloaq)</label>
+                        <input type="text" name="sub" placeholder="e.g., privacy, tech, news" value="<?= htmlspecialchars($_POST['sub'] ?? ($_GET['sub'] ?? 'main')) ?>" required minlength="3" maxlength="21" pattern="[a-z0-9_]+" title="lowercase letters, numbers, underscores">
+                        <p class="form-hint">Lowercase letters, numbers, and underscores only. Default is "main".</p>
+                        
+                        <label class="form-label">Title</label>
+                        <input type="text" name="title" placeholder="What's your post about?" value="<?= htmlspecialchars($_POST['title'] ?? '') ?>" required minlength="3" maxlength="200">
+                        <p class="form-hint">Be clear and descriptive (minimum 3 characters).</p>
+                        
+                        <label class="form-label">Content</label>
+                        <textarea name="content" placeholder="Share your thoughts, provide context, or explain your link..." required minlength="10"><?= htmlspecialchars($_POST['content'] ?? '') ?></textarea>
+                        <p class="form-hint">Minimum 10 characters. You can use line breaks for formatting.</p>
+                        
+                        <button type="submit">Publish Post</button>
                     </form>
                 </div>
                 
-                <p style="font-size: 0.85rem; color: #787c7e; margin-top: 16px;">
-                    By posting, you agree to not be tracked. Because you won't be.
-                </p>
+                <div class="info-box">
+                    <strong>📌 Posting Guidelines</strong>
+                    <p style="margin-bottom: var(--space-sm);">
+                        • Posts are stored in RAM only and will be wiped on server restart<br>
+                        • You can delete your content anytime from Settings<br>
+                        • Be respectful and follow community standards<br>
+                        • No tracking, cookies, or JavaScript—ever
+                    </p>
+                </div>
             </main>
+            
+            <aside class="sidebar">
+                <div class="sidebar-box">
+                    <h3>Posting Tips</h3>
+                    <ul class="sidebar-list">
+                        <li>Choose a relevant subKloaq</li>
+                        <li>Write a clear, descriptive title</li>
+                        <li>Provide context in your content</li>
+                        <li>Engage with comments</li>
+                    </ul>
+                </div>
+                
+                <div class="sidebar-box">
+                    <h3>Privacy Notice</h3>
+                    <p class="sidebar-description">
+                        Your post is completely anonymous. We don't store IP addresses, browser fingerprints, or any identifying metadata.
+                    </p>
+                </div>
+                
+                <div class="sidebar-box">
+                    <h3>Browse Communities</h3>
+                    <p class="sidebar-description">
+                        Not sure which community to post in?
+                    </p>
+                    <a href="?action=subs" class="btn-secondary" style="width: 100%; text-align: center; text-decoration: none; display: block;">View All Communities</a>
+                </div>
+            </aside>
         </div>
     </div>
 </body>
