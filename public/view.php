@@ -13,10 +13,10 @@ if (!$post) {
 
 require 'header.php';
 ?>
-        <a href="?" class="back-link">Back to all posts</a>
+        <a href="?" class="back-link">← Back to all posts</a>
 
         <?php if (($_GET['err'] ?? '') === 'restricted'): ?>
-            <div class="error-box" style="margin-bottom: 16px;">Your account is restricted and cannot comment right now.</div>
+            <div class="error-box">Your account is restricted and cannot comment right now.</div>
         <?php endif; ?>
         
         <div class="layout post-view">
@@ -35,9 +35,11 @@ require 'header.php';
                     </div>
                     <div class="post-content">
                         <div class="post-meta">
-                            <a href="?sub=<?= urlencode($post['sub'] ?? 'main') ?>" style="color: #0079d3; text-decoration: none;">/s/<?= htmlspecialchars($post['sub'] ?? 'main') ?></a>
-                            · Posted by <strong><?= htmlspecialchars($post['author'] ?? 'anon') ?></strong>
-                            <?= format_time($post['created_at']) ?> ago
+                            <a href="?sub=<?= urlencode($post['sub'] ?? 'main') ?>" class="post-meta-sub">/s/<?= htmlspecialchars($post['sub'] ?? 'main') ?></a>
+                            <span class="post-meta-separator">•</span>
+                            <span>Posted by <strong><?= htmlspecialchars($post['author'] ?? 'anon') ?></strong></span>
+                            <span class="post-meta-separator">•</span>
+                            <span><?= format_time($post['created_at']) ?> ago</span>
                         </div>
                         <h1 class="post-title"><?= htmlspecialchars($post['title']) ?></h1>
                         <div class="post-content-full">
@@ -47,9 +49,10 @@ require 'header.php';
                 </div>
                 
                 <div class="comment-form">
+                    <h3 style="margin-bottom: var(--space-md); color: var(--text-primary);">💬 Add a Comment</h3>
                     <form method="post" action="?action=comment&post_id=<?= $post['id'] ?>">
-                        <textarea name="content" placeholder="What are your thoughts?" required></textarea>
-                        <button type="submit">Comment</button>
+                        <textarea name="content" placeholder="What are your thoughts? (Minimum 3 characters)" required minlength="3"></textarea>
+                        <button type="submit">Post Comment</button>
                     </form>
                 </div>
                 
@@ -85,10 +88,11 @@ require 'header.php';
                         <?php endif; ?>
                         
                         <?php if (isset($_GET['parent_id']) && $_GET['parent_id'] == $comment['id']): ?>
-                        <div class="comment-form">
+                        <div class="comment-form" style="margin-left: 0;">
+                            <h4 style="margin-bottom: var(--space-sm); color: var(--text-primary); font-size: 0.9rem;">Reply to <?= htmlspecialchars($comment['author'] ?? 'anon') ?></h4>
                             <form method="post" action="?action=comment&post_id=<?= $post_id ?>&parent_id=<?= $comment['id'] ?>">
-                                <textarea name="content" placeholder="Write a reply..." required></textarea>
-                                <button type="submit">Reply</button>
+                                <textarea name="content" placeholder="Write your reply..." required minlength="3"></textarea>
+                                <button type="submit">Post Reply</button>
                             </form>
                         </div>
                         <?php endif; ?>
